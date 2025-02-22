@@ -1,5 +1,6 @@
 // gpmouse.cpp : Defines the entry point for the application.
 //
+#define ENABLE_GUIDE_BUTTON
 
 #include "framework.h"
 #include "gpmouse.h"
@@ -21,7 +22,13 @@
 
 #pragma comment(lib, "Synchronization.lib")
 #pragma comment(lib, "xinput.lib")
-#pragma comment(lib, "xinput9_1_0.lib")
+#ifdef ENABLE_GUIDE_BUTTON
+    static DWORD (WINAPI *XInputGetStateEx)(DWORD user_index, XINPUT_STATE* state);
+    static HMODULE xinput_dll = 0;
+#   define XInputGetState(a, b) XInputGetStateEx((a), (b))
+#else
+#   pragma comment(lib, "xinput9_1_0.lib")
+#endif
 
 #define MAX_LOADSTRING 100
 
@@ -610,3 +617,24 @@ void check_xinput(uint32_t* pstatus, concurrent_queue<xinput_t>* _queue)
     }
 }
 
+bool xinput_initialize()
+{
+#ifdef ENABLE_GUIDE_BUTTON
+    xinput_dll = LoadLibraryW(L"xinput1_4.dll");
+    if (xinput_dll == 0)
+        return false;
+    XInputGetStateEx = (DWORD (WINAPI*)(DWORD, XINPUT_STATE*)) GetProcAddress(xinput_dll, (char*)100);
+    return XInputGetStateEx != 0;
+#else
+    return true;
+#endif
+}
+
+bool xinput_finalize()
+{
+#ifdef ENABLE_GUIDE_BUTTON
+    return FreeLibrary(xinput_dll);
+#else
+    return true;
+#endif
+}

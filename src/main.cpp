@@ -188,6 +188,9 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE UNUSED(prev), LPTSTR cmdline, 
     if (prev)
         return 1; // TODO:
 
+    if (!xinput_initialize())
+        return (int)GetLastError();
+
     configure();
 
     uint32_t status = GP_STATUS_INITIALIZING;
@@ -209,6 +212,8 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE UNUSED(prev), LPTSTR cmdline, 
     check_thread.join();
     handler_thread.join();
     
+    xinput_finalize();
+
     ReleaseMutex(mutex);
     CloseHandle(mutex);
 

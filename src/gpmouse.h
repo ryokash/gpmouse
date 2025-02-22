@@ -27,4 +27,6 @@ using Concurrency::concurrent_queue;
 
 extern void check_xinput(uint32_t* pstatus, concurrent_queue<xinput_t>* queue);
 extern void handle_xinput(uint32_t* pstatus, concurrent_queue<xinput_t>* queue);
+extern bool xinput_initialize();
+extern bool xinput_finalize();
 

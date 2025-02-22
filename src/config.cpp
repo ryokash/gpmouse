@@ -12,6 +12,9 @@
 #include "config.h"
 
 
+#define XINPUT_GAMEPAD_GUIDE 0x0400
+
+
 namespace gpmouse
 {
 
@@ -340,7 +343,7 @@ void configure()
 		{.buttons = XINPUT_GAMEPAD_RIGHT_THUMB, .keys = { 0, 0, 0, 0 } }, // TODO: end multi touch
 		{.buttons = XINPUT_GAMEPAD_LEFT_SHOULDER,	.modifiers = ctrl,  .keys = { 0, 0, 0, 0 } }, // use as modifier
 		{.buttons = XINPUT_GAMEPAD_RIGHT_SHOULDER,  .modifiers = shift, .keys = { 0, 0, 0, 0 } }, // use as modifier
-		{},
+		{.buttons = XINPUT_GAMEPAD_GUIDE, },
 		{},
 		{.buttons = XINPUT_GAMEPAD_A, .keys = { VK_ESCAPE, 0, 0, 0 } },
 		{.buttons = XINPUT_GAMEPAD_B, .keys = { VK_RBUTTON, 0, 0, 0 } },
