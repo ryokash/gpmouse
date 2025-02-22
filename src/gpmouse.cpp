@@ -70,29 +70,6 @@ struct input_state_t
 };
 input_state_t g_input_state = {};
 
-// single について
-// -------------
-// すべてのボタンが放されている状態から、ボタンが一つだけ押されたとき true に設定。
-// そのまま別のボタンがさらに押された場合に false に設定する。
-// one shot は single == true の時のみ発火する。
-
-// ctrl, alt, shift, win のモディファイアキーは、一旦押された状態になったら
-// すべてのボタンが up になるまで押されたままの状態になる（最後のボタンの up と
-// 同時に up される）。
-//
-// ただし、単独のボタンにモディファイアキーが one shot 以外で割り当てられている
-// 場合は、そのボタンの up と同時に up する。
-
-// ボタンが押される
-//   ボタン不定の場合は vk_buttons に 0 を設定
-//   ボタンに特定のキーやマウスボタンが割り当てられている場合
-//     ほかのキーと衝突しない場合は、vk_buttons と modifiers を設定して普通に処理
-//     ほかのキーと衝突する場合は?
-//       例えば LSHOULDER+A が 
-// リピート
-//   vk_buttons をリピートする
-// ボタンが放される
-//   
 
 enum class acceleration_t
 {
@@ -591,15 +568,6 @@ void handle_xinput(uint32_t* pstatus, concurrent_queue<xinput_t>* _queue)
     }
     auto log = get_logger();
     log->info("Exit handler thread");
-}
-
-void safe_log()
-{
-    try {
-    }
-    catch (...) {
-        // TODO:
-    }
 }
 
 void check_xinput(uint32_t* pstatus, concurrent_queue<xinput_t>* _queue)
