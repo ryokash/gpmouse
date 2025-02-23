@@ -346,7 +346,7 @@ std::wstring application_directory()
 	return std::wstring(buf.data());
 }
 
-void initialize()
+void default_config()
 {
 	constexpr uint8_t ctrl = key_binding_t::CONTROL;
 	constexpr uint8_t alt = key_binding_t::ALT;
@@ -438,7 +438,7 @@ void configure()
 	auto cfg_file = fs::path(application_directory())/L"gpmouse.toml";
 	
 	if (!fs::is_regular_file(cfg_file)) {
-		initialize();
+		default_config();
 		return;
 	}
 
@@ -451,7 +451,7 @@ void configure()
 	//	k.buttons = parse_button(b["button"].as_string());
 	//	k.modifiers =
 	//}
-	initialize();
+	default_config();
 
 	auto apps_cfg = toml::find<std::vector<toml::value>>(cfg, "bindings", "applications");
 	for (auto& app: apps_cfg) {
