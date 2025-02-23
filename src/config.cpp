@@ -374,7 +374,7 @@ void default_config()
 	std::copy(single_button, single_button + 16, g_single_button);
 }
 
-std::vector<std::string> split_string(const std::string& s, const std::string& delims)
+std::vector<std::string> split_string(const std::string& s, const std::string& delims = " ,&|")
 {
 	std::vector<std::string> ret;
 	return boost::split(ret, s, boost::is_any_of(delims));
@@ -488,7 +488,7 @@ void configure()
 
 		auto m = binding["modifiers"];
 		if (m.is_string()) {
-			for (auto mod: split_string(m.as_string(), " |&"))
+			for (auto mod: split_string(m.as_string()))
 				k.add_modifier(mod);
 		}
 		else if (!m.is_empty()) {
@@ -499,7 +499,7 @@ void configure()
 
 		auto b = binding["buttons"];
 		if (b.is_string()) {
-			for (auto button: split_string(b.as_string(), " |&"))
+			for (auto button: split_string(b.as_string()))
 				k.buttons |= parse_button(button);
 		}
 		else if (!b.is_empty()) {
@@ -510,7 +510,7 @@ void configure()
 
 		auto keys = binding["keys"];
 		if (keys.is_string()) {
-			auto ks = split_string(keys.as_string(), " |&");
+			auto ks = split_string(keys.as_string());
 			if (ks.size() > std::size(k.keys))
 				throw std::runtime_error("too many keys");
 			for (int i = 0; i < ks.size(); ++i)
