@@ -226,8 +226,6 @@ struct key_binding_t
 	}
 
 	void fill(keystate_t& ks) {
-		memset(&ks, 0, sizeof(ks));
-
 		if (has_alt())
 			ks.press(VK_MENU);
 		if (has_ctrl())
