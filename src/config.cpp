@@ -4,16 +4,19 @@
 
 #include <iterator>
 #include <vector>
+#include <filesystem>
 #include <cassert>
 
+#include <toml.hpp>
 #include <spdlog/sinks/rotating_file_sink.h>
-
+#include <boost/algorithm/string/split.hpp>
+#include <boost/algorithm/string/classification.hpp>
 
 #include "config.h"
 
 
 #define XINPUT_GAMEPAD_GUIDE 0x0400
-
+#define MAX_PATH_LENGTH 32767
 
 namespace gpmouse
 {
@@ -24,7 +27,7 @@ struct virtual_key_code_t
 	uint8_t value;
 };
 
-constexpr virtual_key_code_t virtual_key_codes[256] = {
+constexpr virtual_key_code_t virtual_key_codes[] = {
 	{ "", 0 },
 	{ "VK_LBUTTON", VK_LBUTTON },
 	{ "VK_RBUTTON", VK_RBUTTON },
@@ -306,6 +309,10 @@ constexpr virtual_key_code_t virtual_key_codes[256] = {
 	{ "VK_PA1", VK_PA1 },
 	{ "VK_OEM_CLEAR", VK_OEM_CLEAR },
 	{ "", 0xFF },
+	// duplicate items
+	{ "VK_HANGEUL", VK_HANGEUL },
+	{ "VK_HANGUL", VK_HANGUL },
+	{ "VK_HANJA", VK_HANJA },
 };
 
 const char* vk_name(uint8_t vk)
@@ -315,22 +322,36 @@ const char* vk_name(uint8_t vk)
 
 std::vector<key_binding_t> g_key_bindings;
 key_binding_t g_single_button[16];
-std::vector<std::regex> g_apps;
+//std::vector<std::regex> g_apps;
+struct app_t {
+	std::string name;
+	uint8_t priority;
+	std::regex pattern;
+};
+std::map<std::string, app_t> g_apps;
 
-void configure()
+std::wstring application_directory()
 {
-	using namespace std::regex_constants;
+	std::array<wchar_t, MAX_PATH_LENGTH + 1> buf;
+	auto len = GetModuleFileNameW(0, buf.data(), buf.size());
+	if (len == buf.size())
+		return L""; // TODO:
 
-	auto num_keys = std::size(virtual_key_codes);
-	assert(num_keys == 256);
-	auto sz = sizeof(key_binding_t);
-	auto sbsz = sizeof(g_single_button);
-	assert(sz * std::size(g_single_button) == sbsz);
+	for (auto p = buf.data() + len, head = buf.data(); p >= head; --p) {
+		if (*p == L'\\')
+			break;
+		*p = L'\0';
+	}
 
-	modifiers_t alt = {}, shift = {}, ctrl = {};
-	alt.alt = 1;
-	shift.shift = 1;
-	ctrl.ctrl = 1;
+	return std::wstring(buf.data());
+}
+
+void initialize()
+{
+	constexpr uint8_t ctrl = key_binding_t::CONTROL;
+	constexpr uint8_t alt = key_binding_t::ALT;
+	constexpr uint8_t shift = key_binding_t::SHIFT;
+	constexpr uint8_t win = key_binding_t::WINDOWS;
 
 	key_binding_t single_button[16] = {
 		{.buttons = XINPUT_GAMEPAD_DPAD_UP,     .keys = { VK_UP, 0, 0, 0 } },
@@ -341,9 +362,9 @@ void configure()
 		{.buttons = XINPUT_GAMEPAD_BACK,        .keys = { VK_BACK, 0, 0, 0 } },
 		{.buttons = XINPUT_GAMEPAD_LEFT_THUMB,  .keys = { 0, 0, 0, 0 } }, // TODO: start multi touch
 		{.buttons = XINPUT_GAMEPAD_RIGHT_THUMB, .keys = { 0, 0, 0, 0 } }, // TODO: end multi touch
-		{.buttons = XINPUT_GAMEPAD_LEFT_SHOULDER,	.modifiers = ctrl,  .keys = { 0, 0, 0, 0 } }, // use as modifier
-		{.buttons = XINPUT_GAMEPAD_RIGHT_SHOULDER,  .modifiers = shift, .keys = { 0, 0, 0, 0 } }, // use as modifier
-		{.buttons = XINPUT_GAMEPAD_GUIDE, },
+		{.buttons = XINPUT_GAMEPAD_LEFT_SHOULDER,	.modifiers = ctrl, }, // use as modifier
+		{.buttons = XINPUT_GAMEPAD_RIGHT_SHOULDER,  .modifiers = shift }, // use as modifier
+		{.buttons = XINPUT_GAMEPAD_GUIDE,			.modifiers = win },
 		{},
 		{.buttons = XINPUT_GAMEPAD_A, .keys = { VK_ESCAPE, 0, 0, 0 } },
 		{.buttons = XINPUT_GAMEPAD_B, .keys = { VK_RBUTTON, 0, 0, 0 } },
@@ -351,111 +372,275 @@ void configure()
 		{.buttons = XINPUT_GAMEPAD_Y, .keys = { VK_MBUTTON, 0, 0, 0 } },
 	};
 	std::copy(single_button, single_button + 16, g_single_button);
+}
 
-	g_apps.emplace_back("^(HmFilerCLassic|firefox|msedge|chrome|vivaldi)\\.exe$", ECMAScript|icase);
-	g_apps.emplace_back("^(firefox|msedge|chrome|vivaldi)\\.exe$", ECMAScript|icase);
-	g_apps.emplace_back("^vivaldi\\.exe$", ECMAScript|icase);
-	g_apps.emplace_back("^HmFilerClassic\\.exe$", ECMAScript|icase);
-	g_apps.emplace_back("^HD-Player\\.exe$", ECMAScript|icase);
+std::vector<std::string> split_string(const std::string& s, const std::string& delims)
+{
+	std::vector<std::string> ret;
+	return boost::split(ret, s, boost::is_any_of(delims));
+}
 
-	auto& tabapps = g_apps[0];
-	auto& browser = g_apps[1];
-	auto& vivaldi = g_apps[2];
-	auto& hmfiler = g_apps[3];
-	auto& bluestacks = g_apps[4];
+uint16_t parse_button(const std::string& s)
+{
+	static constexpr struct {
+		const char* name;
+		uint16_t value;
+	}
+	buttons[] = {
+		{ "UP",				XINPUT_GAMEPAD_DPAD_UP },
+		{ "DOWN",			XINPUT_GAMEPAD_DPAD_DOWN },
+		{ "LEFT",			XINPUT_GAMEPAD_DPAD_LEFT },
+		{ "RIGHT",			XINPUT_GAMEPAD_DPAD_RIGHT },
+		{ "START",			XINPUT_GAMEPAD_START },
+		{ "BACK",			XINPUT_GAMEPAD_BACK },
+		{ "LT",				XINPUT_GAMEPAD_LEFT_THUMB },
+		{ "LEFT_THUMB",		XINPUT_GAMEPAD_LEFT_THUMB },
+		{ "RT",				XINPUT_GAMEPAD_RIGHT_THUMB },
+		{ "RIGHT_THUMB",	XINPUT_GAMEPAD_RIGHT_THUMB },
+		{ "LS",				XINPUT_GAMEPAD_LEFT_SHOULDER },
+		{ "LEFT_SHOULDER",	XINPUT_GAMEPAD_LEFT_SHOULDER },
+		{ "RS",				XINPUT_GAMEPAD_RIGHT_SHOULDER },
+		{ "RIGHT_SHOULDER", XINPUT_GAMEPAD_RIGHT_SHOULDER },
+		{ "GUIDE",			XINPUT_GAMEPAD_GUIDE },
+		{ "A",				XINPUT_GAMEPAD_A },
+		{ "B",				XINPUT_GAMEPAD_B },
+		{ "X",				XINPUT_GAMEPAD_X },
+		{ "Y",				XINPUT_GAMEPAD_Y },
+	};
 
-	key_binding_t k;
+	auto us = boost::to_upper_copy(s);
+	for (auto& b: buttons)
+		if (us == b.name)
+			return b.value;
+	return 0;
+}
+
+uint8_t parse_vk_code(const std::string& s)
+{
+	auto us = boost::to_upper_copy(s);
+	for (auto& vk: virtual_key_codes)
+		if (us == vk.name)
+			return vk.value;
+
+	us = "VK_" + us;
+	for (auto& vk: virtual_key_codes)
+		if (us == vk.name)
+			return vk.value;
+	
+	return 0;
+}
+
+void configure()
+{
+	using namespace std::regex_constants;
+	namespace fs = std::filesystem;
+
+	auto cfg_file = fs::path(application_directory())/L"gpmouse.toml";
+	
+	if (!fs::is_regular_file(cfg_file)) {
+		initialize();
+		return;
+	}
+
+	auto cfg = toml::parse(cfg_file, toml::spec::v(1, 1, 0));
+
+	//memset(g_single_button, 0, sizeof(g_single_button));
+	//auto buttons = toml::find<std::vector<toml::value>>(cfg, "bindings", "buttons");
+	//for (auto& b: buttons) {
+	//	key_binding_t k = {};
+	//	k.buttons = parse_button(b["button"].as_string());
+	//	k.modifiers =
+	//}
+	initialize();
+
+	auto apps_cfg = toml::find<std::vector<toml::value>>(cfg, "bindings", "applications");
+	for (auto& app: apps_cfg) {
+		auto name = app["name"].as_string();
+		app_t a {
+			name,
+			toml::find_or(app, "priority", UCHAR_MAX - 1), 
+			std::regex(app["pattern"].as_string(), ECMAScript|icase),
+		};
+		g_apps.emplace(name, std::move(a));
+	}
+
+	auto bindings = toml::find<std::vector<toml::value>>(cfg, "bindings", "binding");
+	for (auto& binding: bindings) {
+		key_binding_t k = {};
+
+		auto priority = toml::find_or(binding, "priority", 255);
+		k.priority = (priority << 8);
+
+		auto app = toml::find_or_default<std::string>(binding, "app");
+		if (!app.empty()) {
+			auto ri = g_apps.find(app);
+			if (ri == g_apps.end()) {
+				// TODO: log? throw?
+				continue;
+			}
+			k.executable = &ri->second.pattern;
+			k.priority += ri->second.priority;
+		}
+		else
+			k.priority += UCHAR_MAX;
+		k.active_window(toml::find_or_default<bool>(binding, "active_window"));
+		k.oneshot(toml::find_or_default<bool>(binding, "oneshot"));
+
+		auto m = binding["modifiers"];
+		if (m.is_string()) {
+			for (auto mod: split_string(m.as_string(), " |&"))
+				k.add_modifier(mod);
+		}
+		else if (!m.is_empty()) {
+			auto mods = m.as_array();
+			for (auto& mod: mods)
+				k.add_modifier(mod.as_string());
+		}
+
+		auto b = binding["buttons"];
+		if (b.is_string()) {
+			for (auto button: split_string(b.as_string(), " |&"))
+				k.buttons |= parse_button(button);
+		}
+		else if (!b.is_empty()) {
+			auto buttons = b.as_array();
+			for (auto& button: buttons)
+				k.buttons |= parse_button(button.as_string());
+		}
+
+		auto keys = binding["keys"];
+		if (keys.is_string()) {
+			auto ks = split_string(keys.as_string(), " |&");
+			if (ks.size() > std::size(k.keys))
+				throw std::runtime_error("too many keys");
+			for (int i = 0; i < ks.size(); ++i)
+				k.keys[i] = parse_vk_code(ks[i]);
+		}
+		else if (!keys.is_empty()) {
+			auto ks = keys.as_array();
+			assert(std::size(k.keys) == 4);
+			if (ks.size() > std::size(k.keys))
+				throw std::runtime_error("too many keys");
+			for (int i = 0; i < ks.size(); ++i)
+				k.keys[i] = parse_vk_code(ks[i].as_string());
+		}
+
+		g_key_bindings.push_back(std::move(k));
+	}
+
+#if 0
+	auto& tabapps = g_apps.find("tabapp")->second;
+	auto& browser = g_apps.find("browser")->second;
+	auto& vivaldi = g_apps.find("vivaldi")->second;
+	auto& hmfiler = g_apps.find("hmfiler")->second;
+	auto& bluestacks = g_apps.find("bluestacks")->second;
+
+	//g_apps.emplace_back("^(HmFilerCLassic|firefox|msedge|chrome|vivaldi)\\.exe$", ECMAScript|icase);
+	//g_apps.emplace_back("^(firefox|msedge|chrome|vivaldi)\\.exe$", ECMAScript|icase);
+	//g_apps.emplace_back("^vivaldi\\.exe$", ECMAScript|icase);
+	//g_apps.emplace_back("^HmFilerClassic\\.exe$", ECMAScript|icase);
+	//g_apps.emplace_back("^HD-Player\\.exe$", ECMAScript|icase);
+
+	//auto& tabapps = g_apps[0];
+	//auto& browser = g_apps[1];
+	//auto& vivaldi = g_apps[2];
+	//auto& hmfiler = g_apps[3];
+	//auto& bluestacks = g_apps[4];
+
+	constexpr uint8_t ctrl = key_binding_t::CONTROL;
+	constexpr uint8_t alt = key_binding_t::ALT;
+	constexpr uint8_t shift = key_binding_t::SHIFT;
+	constexpr uint8_t win = key_binding_t::WINDOWS;	key_binding_t k;
 
 	k = {};
 	k.buttons = XINPUT_GAMEPAD_START | XINPUT_GAMEPAD_DPAD_RIGHT;
-	k.modifiers.alt = 1;
+	k.modifiers = alt;
 	k.keys[0] = VK_TAB;
 	g_key_bindings.push_back(k);
 
 	// TODO: ボタンを放したときに Left Shoulder が alt になってしまって、メニューが開いてしまう。
 	k = {};
-	k.process = &tabapps;
+	k.executable = &tabapps;
 	k.buttons = XINPUT_GAMEPAD_LEFT_SHOULDER|XINPUT_GAMEPAD_A;
-	k.modifiers.ctrl = 1;
+	k.modifiers = ctrl;
 	k.keys[0] = VK_F4;
 	g_key_bindings.push_back(k);
 
 	// TODO: ボタンを放したときに Left Shoulder が alt になってしまって、メニューが開いてしまう。
 	k = {};
-	k.process = &tabapps;
+	k.executable = &tabapps;
 	k.buttons = XINPUT_GAMEPAD_LEFT_SHOULDER|XINPUT_GAMEPAD_X;
-	k.modifiers.ctrl = 1;
+	k.modifiers = ctrl;
 	k.keys[0] = VK_LBUTTON;
 	g_key_bindings.push_back(k);
 
 	k = {};
-	k.process = &tabapps;
+	k.executable = &tabapps;
 	k.buttons = XINPUT_GAMEPAD_RIGHT_SHOULDER|XINPUT_GAMEPAD_DPAD_UP;
-	k.modifiers.alt = 1;
+	k.modifiers = alt;
 	k.keys[0] = VK_RIGHT;
 	g_key_bindings.push_back(k);
 
 	k = {};
-	k.process = &tabapps;
+	k.executable = &tabapps;
 	k.buttons = XINPUT_GAMEPAD_RIGHT_SHOULDER|XINPUT_GAMEPAD_DPAD_DOWN;
-	k.modifiers.alt = 1;
+	k.modifiers = alt;
 	k.keys[0] = VK_LEFT;
 	g_key_bindings.push_back(k);
 
 	k = {};
-	k.process = &tabapps;
+	k.executable = &tabapps;
 	k.buttons = XINPUT_GAMEPAD_RIGHT_SHOULDER|XINPUT_GAMEPAD_DPAD_LEFT;
-	k.modifiers.ctrl = 1;
-	k.modifiers.shift = 1;
+	k.modifiers = ctrl|shift;
 	k.keys[0] = VK_TAB;
 	g_key_bindings.push_back(k);
 
 	k = {};
-	k.process = &tabapps;
+	k.executable = &tabapps;
 	k.buttons = XINPUT_GAMEPAD_RIGHT_SHOULDER|XINPUT_GAMEPAD_DPAD_RIGHT;
-	k.modifiers.ctrl = 1;
+	k.modifiers = ctrl;
 	k.keys[0] = VK_TAB;
 	g_key_bindings.push_back(k);
 
 	k = {};
-	k.process = &tabapps;
+	k.executable = &tabapps;
 	k.buttons = XINPUT_GAMEPAD_LEFT_SHOULDER|XINPUT_GAMEPAD_A;
-	k.modifiers.ctrl = 1;
+	k.modifiers = ctrl;
 	k.keys[0] = VK_F4;
 	g_key_bindings.push_back(k);
 
 	k = {};
-	k.process = &browser;
+	k.executable = &browser;
 	k.buttons = XINPUT_GAMEPAD_A;
-	k.modifiers.alt = 1;
+	k.modifiers = alt;
 	k.keys[0] = VK_LEFT;
 	g_key_bindings.push_back(k);
 
 	k = {};
-	k.process = &browser;
+	k.executable = &browser;
 	k.buttons = XINPUT_GAMEPAD_RIGHT_SHOULDER|XINPUT_GAMEPAD_A;
 	k.keys[0] = VK_ESCAPE;
 	g_key_bindings.push_back(k);
 
 	k = {};
-	k.process = &browser;
+	k.executable = &browser;
 	k.buttons = XINPUT_GAMEPAD_LEFT_SHOULDER|XINPUT_GAMEPAD_RIGHT_SHOULDER|XINPUT_GAMEPAD_A;
-	k.modifiers.ctrl = 1;
-	k.modifiers.shift = 1;
+	k.modifiers = ctrl|shift;
 	k.keys[0] = (uint8_t)'T';
 	g_key_bindings.push_back(k);
 
 	k = {};
-	k.process = &bluestacks;
+	k.executable = &bluestacks;
 	k.buttons = XINPUT_GAMEPAD_BACK;
 	k.keys[0] = VK_F11;
 	g_key_bindings.push_back(k);
 
 	k = {};
-	k.process = &bluestacks;
+	k.executable = &bluestacks;
 	k.buttons = XINPUT_GAMEPAD_RIGHT_SHOULDER|XINPUT_GAMEPAD_DPAD_DOWN;
 	k.keys[0] = VK_F12;
 	g_key_bindings.push_back(k);
+#endif
 
 	for (auto& sb: g_single_button)
 		if (sb.buttons != 0)
@@ -466,7 +651,7 @@ void configure()
 		g_key_bindings.end(),
 		[](auto& a, auto& b){
 			return a.buttons < b.buttons ||
-				a.buttons == b.buttons && a.process > b.process;
+				a.buttons == b.buttons && a.priority < b.priority; 
 		}
 	);
 }

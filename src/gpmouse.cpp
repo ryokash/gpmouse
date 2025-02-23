@@ -111,12 +111,12 @@ struct stick_params_t
     float min_touch_dist = 50;
 
     stick_params_t() {
-        cursor.base_speed = 0.5;
+        cursor.base_speed = 0.25;
         cursor.accel_max = 5;
         cursor.left_trigger = trigger_function_t::brake;
         cursor.right_trigger = trigger_function_t::accel;
 
-        scroll.base_speed = 0.05;
+        scroll.base_speed = 0.01;
         scroll.accel_max = 16;
         scroll.deadzone = 5000;
         scroll.left_trigger = trigger_function_t::brake;
@@ -345,6 +345,9 @@ keystate_t g_prev_keys = {};
 
 keystate_t translate_input(WORD input)
 {
+#ifdef _DEBUG
+    auto log = get_logger();
+#endif
     key_binding_t v{.buttons=input};
     auto [lb, ub] = std::equal_range(g_key_bindings.begin(), g_key_bindings.end(), v);
     
@@ -361,16 +364,26 @@ keystate_t translate_input(WORD input)
         }
     }
     //else if (lb->process.empty()) { // input にアプリケーション固有のバインディングはない        
-    else if (lb->process == 0) { // input にアプリケーション固有のバインディングはない        
+    else if (lb->executable == 0) { // input にアプリケーション固有のバインディングはない        
         lb->fill(keys);
     }
     else {
         auto pid = get_process_id_under_cursor();
         auto process = get_executable_name(pid);
 
+#ifdef _DEBUG
+        log->info("finding custom rule");
+        log->info("target process: \"{}\", input: {:04X}", process, input);
+#endif
+
         for (auto i = lb; i != ub; ++i) {
-            //if (!i->process.empty() && process != i->process) // TODO: 正規表現のマッチにする
-            if (i->process != 0 && !std::regex_match(process, *i->process))
+#if defined(_DEBUG) // && _MSC_VER == ??
+            if (i->executable == 0)
+                log->info("No custom rule matched");
+            else
+                log->info("Testing \"{}\"", *(std::string*)((char*)i->executable + 48));
+#endif
+            if (i->executable != 0 && !std::regex_match(process, *i->executable))
                 continue;
             i->fill(keys);
             break;

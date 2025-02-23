@@ -7,6 +7,7 @@
 #include <vector>
 #include <regex>
 
+#include <boost/algorithm/string.hpp>
 #include <spdlog/spdlog.h>
 
 
@@ -146,34 +147,87 @@ struct keystate_t
 				return false;
 		return true;
 	}
-	bool repeatable() const {
+	bool oneshot() const {
 		// virtual key code 0 は何にも割り当てられていないので、リピート禁止フラグとして使う
-		return (keys[0] & 1) == 0;
+		return (keys[0] & 1) == 1;
 	}
 };
 
+
+
 struct key_binding_t
 {
-	//std::string process; // TODO: string じゃなく regex にする
-	std::regex* process = 0; // TODO: string じゃなく regex にする
+	std::regex* executable = 0;
+	uint16_t priority = USHRT_MAX;
 	uint16_t buttons = 0;
-	modifiers_t modifiers = {};
+	uint8_t flags = 0;
+	uint8_t modifiers = 0;
 	uint8_t keys[4] = {}; // とりあえず4つ押しまで
 
+	enum {
+		CONTROL = 1 << 0,
+		ALT     = 1 << 1,
+		SHIFT   = 1 << 2,
+		WINDOWS = 1 << 3,
+		COMMAND = 1 << 4,
+		META    = 1 << 5,
+		COPILOT = 1 << 6,
+	};
+	enum {
+		ONESHOT       = 1 << 0,
+		ACTIVE_WINDOW = 1 << 1,
+	};
+
 	bool has_alt() const {
-		return modifiers.alt;
+		return modifiers & ALT;
 	}
 	bool has_ctrl() const {
-		return modifiers.ctrl;
+		return modifiers & CONTROL;
 	}
 	bool has_shift() const {
-		return modifiers.shift;
+		return modifiers & SHIFT;
 	}
 	bool has_win() const {
-		return modifiers.win;
+		return modifiers & WINDOWS;
+	}
+
+	void add_modifier(const std::string& ms) {
+		auto s = boost::to_upper_copy(ms);
+		if (s == "CONTROL" || s == "CTRL")
+			modifiers |= CONTROL;
+		if (s == "ALT")
+			modifiers |= ALT;
+		if (s == "SHIFT")
+			modifiers |= SHIFT;
+		if (s == "WIN" || s == "WINDOWS")
+			modifiers |= WINDOWS;
+	}
+
+	void on(uint8_t flag) {
+		flags |= flag;
+	}
+	void off(uint8_t flag) {
+		flags &= ~flag;
+	}
+	void set_flag(uint8_t flag, bool val) {
+		val ? on(flag) : off(flag);
+	}
+	bool oneshot() const {
+		return flags & ONESHOT;
+	}
+	void oneshot(bool val) {
+		set_flag(ONESHOT, val);
+	}
+	bool active_window() const {
+		return flags & ACTIVE_WINDOW;
+	}
+	void active_window(bool val) {
+		set_flag(ACTIVE_WINDOW, val);
 	}
 
 	void fill(keystate_t& ks) {
+		memset(&ks, 0, sizeof(ks));
+
 		if (has_alt())
 			ks.press(VK_MENU);
 		if (has_ctrl())
@@ -182,8 +236,10 @@ struct key_binding_t
 			ks.press(VK_SHIFT);
 		if (has_win())
 			ks.press(VK_LWIN);
+		if (oneshot())
+			ks.press(0);
 
-		for (auto vk : keys) {
+		for (auto vk: keys) {
 			if (vk == 0)
 				break;
 			ks.press(vk);

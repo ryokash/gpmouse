@@ -191,7 +191,16 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE UNUSED(prev), LPTSTR cmdline, 
     if (!xinput_initialize())
         return (int)GetLastError();
 
-    configure();
+    try {
+        configure();
+    }
+    catch (std::exception& exc) {
+        MessageBoxA(0, exc.what(), "error", MB_OK);
+        return -1;
+    }
+    catch (...) {
+        return -1;
+    }
 
     uint32_t status = GP_STATUS_INITIALIZING;
     concurrent_queue<xinput_t> queue;
