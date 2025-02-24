@@ -92,7 +92,18 @@ void Cls_OnClose(HWND hwnd)
 void Cls_OnCommand(HWND hwnd, int id, HWND hWndCtl, UINT codeNotify)
 {
     switch (id) {
-    case IDM_FOLDER:
+    case IDM_RELOAD:
+        try {
+            // TODO: configure is not thread safe.
+            gpmouse::configure();
+        }
+        catch (std::exception& exc) {
+            MessageBoxA(0, exc.what(), "error", MB_OK);
+            exit(-1);
+        }
+        catch (...) {
+            exit(-2);
+        }
         break;
 
     case IDM_QUIT:

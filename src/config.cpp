@@ -435,6 +435,9 @@ void configure()
 	using namespace std::regex_constants;
 	namespace fs = std::filesystem;
 
+	g_apps.clear();
+	g_key_bindings.clear();
+
 	auto cfg_file = fs::path(application_directory())/L"gpmouse.toml";
 	
 	if (!fs::is_regular_file(cfg_file)) {
