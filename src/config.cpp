@@ -444,14 +444,45 @@ void configure()
 
 	auto cfg = toml::parse(cfg_file, toml::spec::v(1, 1, 0));
 
-	//memset(g_single_button, 0, sizeof(g_single_button));
-	//auto buttons = toml::find<std::vector<toml::value>>(cfg, "bindings", "buttons");
-	//for (auto& b: buttons) {
-	//	key_binding_t k = {};
-	//	k.buttons = parse_button(b["button"].as_string());
-	//	k.modifiers =
-	//}
-	default_config();
+	memset(g_single_button, 0, sizeof(g_single_button));
+	auto buttons = toml::find<std::vector<toml::value>>(cfg, "bindings", "buttons");
+	for (auto& b: buttons) {
+		auto button = parse_button(b["button"].as_string());
+		
+		DWORD i;
+		if (!BitScanForward(&i, button))
+			throw std::runtime_error("unknown button");
+
+		auto& k = g_single_button[i];
+		k.buttons = button;
+		k.priority = USHRT_MAX;
+		
+		auto modifiers = b["modifiers"];
+		if (modifiers.is_string()) {
+			for (auto m: split_string(modifiers.as_string()))
+				k.add_modifier(m);
+		}
+		else if (!modifiers.is_empty()) {
+			for (auto m: modifiers.as_array())
+				k.add_modifier(m.as_string());
+		}
+
+		auto keys = b["keys"];
+		if (keys.is_string()) {
+			auto ks = split_string(keys.as_string());
+			if (ks.size() > std::size(k.keys))
+				throw std::runtime_error("too many keys");
+			for (int i = 0; i < ks.size(); ++i)
+				k.keys[i] = parse_vk_code(ks[i]);
+		}
+		else if (!keys.is_empty()) {
+			auto ks = keys.as_array();
+			if (ks.size() > std::size(k.keys))
+				throw std::runtime_error("too many keys");
+			for (int i = 0; i < ks.size(); ++i)
+				k.keys[i] = parse_vk_code(ks[i].as_string());
+		}
+	}
 
 	auto apps_cfg = toml::find<std::vector<toml::value>>(cfg, "bindings", "applications");
 	for (auto& app: apps_cfg) {
