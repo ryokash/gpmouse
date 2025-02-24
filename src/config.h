@@ -14,34 +14,6 @@
 namespace gpmouse
 {
 
-struct modifiers_t
-{
-	union {
-		uint16_t value;
-		struct {
-			uint16_t ctrl : 1;
-			uint16_t alt : 1;
-			uint16_t shift : 1;
-			uint16_t win : 1;
-			uint16_t cmd : 1;
-			uint16_t meta : 1;
-			uint16_t copilot : 1;
-			uint16_t repeatble : 1;
-			uint16_t mod0 : 1;
-			uint16_t mod1 : 1;
-			uint16_t mod2 : 1;
-			uint16_t mod3 : 1;
-			uint16_t mod4 : 1;
-			uint16_t mod5 : 1;
-			uint16_t mod6 : 1;
-			uint16_t mod7 : 1;
-		};
-	};
-};
-
-static const uint8_t VK_MOUSE_EVENTS = VK_LBUTTON|VK_RBUTTON|VK_MBUTTON|VK_XBUTTON1|VK_XBUTTON2;
-static const uint8_t VK_MODIFIERS    = VK_SHIFT|VK_CONTROL|VK_MENU|VK_LSHIFT|VK_RSHIFT|VK_LCONTROL|VK_RCONTROL|VK_LMENU|VK_RMENU|VK_LWIN|VK_RWIN;
-
 constexpr inline uint64_t mask_bit(int i, uint8_t vk)
 {
 	return (vk >> 6) == i ? (1ull << (vk & 0x3f)) : 0;
