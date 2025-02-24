@@ -278,31 +278,6 @@ void right_stick(const stick_t& cfg, const XINPUT_GAMEPAD& input)
 }
 
 
-#define MOD_NONE    ((uint16_t)0x0000)
-#define MOD_CTRL    ((uint16_t)0x0001)
-#define MOD_ALT     ((uint16_t)0x0002)
-#define MOD_SHIFT   ((uint16_t)0x0004)
-#define MOD_WIN     ((uint16_t)0x0008)
-
-
-enum button_index_t
-{
-    BUTTON_UP = 0,
-    BUTTON_DOWN,
-    BUTTON_LEFT,
-    BUTTON_RIGHT,
-    BUTTON_START,
-    BUTTON_BACK,
-    BUTTON_LTHUMB,
-    BUTTON_RTHUMB,
-    BUTTON_LSHOULDER,
-    BUTTON_RSHOULDER,
-    BUTTON_A = 12,
-    BUTTON_B,
-    BUTTON_X,
-    BUTTON_Y,
-};
-
 DWORD get_process_id_under_cursor()
 {
     POINT pt;
