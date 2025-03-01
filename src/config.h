@@ -7,6 +7,8 @@
 #include <vector>
 #include <regex>
 
+#include <xinput.h>
+
 #include <boost/algorithm/string.hpp>
 #include <spdlog/spdlog.h>
 
@@ -222,9 +224,44 @@ inline bool operator<(const key_binding_t& a, const key_binding_t& b)
 }
 
 
+enum class accel_type_t: uint16_t
+{
+	linear = 0,
+	exponential,
+};
+enum class trigger_function_t: uint16_t
+{
+	nop = 0,
+	acceleration,
+	deacceleration,
+};
+
+struct stick_t
+{
+	int16_t cx = 0;
+	int16_t cy = 0;
+	uint16_t deadzone = 2500;
+	accel_type_t accel_type = accel_type_t::exponential;
+	float base_speed = 0.8;
+	float accel_max = 8;
+	float deaccel_max = 4;
+	trigger_function_t left_trigger = trigger_function_t::deacceleration;
+	trigger_function_t right_trigger = trigger_function_t::acceleration;
+};
+
+struct stick_params_t
+{
+	bool initialized = false;
+	stick_t cursor;
+	stick_t scroll;
+	float min_touch_dist = 50;
+};
+
 // g_key_binding ‚Í (buttons asc, process desc) ‚Åƒ\[ƒg‚µ‚Ä‚¨‚­
 extern std::vector<key_binding_t> g_key_bindings;
 extern key_binding_t g_single_button[16];
+extern stick_params_t g_stick_params[XUSER_MAX_COUNT];
+
 
 void configure();
 std::shared_ptr<spdlog::logger> get_logger();

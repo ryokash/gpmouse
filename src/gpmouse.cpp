@@ -78,52 +78,6 @@ struct input_state_t
 input_state_t g_input_state = {};
 
 
-enum class acceleration_t
-{
-    linear = 0,
-    exponential,
-};
-enum class trigger_function_t
-{
-    nop,
-    accel,
-    brake,
-};
-
-struct stick_t
-{
-    int cx;
-    int cy;
-    uint32_t deadzone = 2500;
-    acceleration_t accel = acceleration_t::exponential;
-    float base_speed = 0.8;
-    float accel_max = 8;
-    float brake_max = 4;
-    trigger_function_t left_trigger = trigger_function_t::nop;
-    trigger_function_t right_trigger = trigger_function_t::nop;
-};
-
-struct stick_params_t
-{
-    bool initialized = false;
-    stick_t cursor;
-    stick_t scroll;
-    float min_touch_dist = 50;
-
-    stick_params_t() {
-        cursor.base_speed = 0.25;
-        cursor.accel_max = 5;
-        cursor.left_trigger = trigger_function_t::brake;
-        cursor.right_trigger = trigger_function_t::accel;
-
-        scroll.base_speed = 0.01;
-        scroll.accel_max = 16;
-        scroll.deadzone = 5000;
-        scroll.left_trigger = trigger_function_t::brake;
-        scroll.right_trigger = trigger_function_t::accel;
-    }
-}
-g_stick_params[XUSER_MAX_COUNT];
 
 UINT send_input(UINT n, INPUT* inputs)
 {
@@ -179,13 +133,13 @@ void left_stick(const stick_t& cfg, const XINPUT_GAMEPAD& input)
         return;
 
     float accel = 0.0f;
-    if (cfg.left_trigger == trigger_function_t::accel)
+    if (cfg.left_trigger == trigger_function_t::acceleration)
         accel = std::max<float>(accel, input.bLeftTrigger);
-    if (cfg.right_trigger == trigger_function_t::accel)
+    if (cfg.right_trigger == trigger_function_t::acceleration)
         accel = std::max<float>(accel, input.bRightTrigger);
     //OutputDebugStringA(std::format("raw accel: {}\n", accel).c_str());
 
-    if (cfg.accel == acceleration_t::linear)
+    if (cfg.accel_type == accel_type_t::linear)
         accel = accel * (cfg.accel_max - 1) / 255 + 1;
     else {
         //OutputDebugStringA(std::format("exp(accel): {}, max: {}, exp(255): {}\n", exp((double)accel), cfg.accel_max, exp(255)).c_str());
@@ -195,11 +149,11 @@ void left_stick(const stick_t& cfg, const XINPUT_GAMEPAD& input)
     //OutputDebugStringA(std::format("accel: {}\n", accel).c_str());
 
     float brake = 0.0f;
-    if (cfg.left_trigger == trigger_function_t::brake)
+    if (cfg.left_trigger == trigger_function_t::deacceleration)
         brake = std::max<float>(brake, input.bLeftTrigger);
-    if (cfg.right_trigger == trigger_function_t::brake)
+    if (cfg.right_trigger == trigger_function_t::deacceleration)
         brake = std::max<float>(brake, input.bRightTrigger);
-    brake = brake * (cfg.brake_max - 1) / 255 + 1;
+    brake = brake * (cfg.deaccel_max - 1) / 255 + 1;
 
     // Remark: dy の計算で SM_CXSCREEN を使っているのは間違いではない。
     //   SM_CXSCREEN で計算すると、縦と横でカーソルのスピードが違ってしまうため、
@@ -247,18 +201,18 @@ void right_stick(const stick_t& cfg, const XINPUT_GAMEPAD& input)
         return;
 
     float accel = 0.0f;
-    if (cfg.left_trigger == trigger_function_t::accel)
+    if (cfg.left_trigger == trigger_function_t::acceleration)
         accel = std::max<float>(accel, input.bLeftTrigger);
-    if (cfg.right_trigger == trigger_function_t::accel)
+    if (cfg.right_trigger == trigger_function_t::acceleration)
         accel = std::max<float>(accel, input.bRightTrigger);
     accel = accel * (cfg.accel_max - 1) / 255 + 1;
 
     float brake = 0.0f;
-    if (cfg.left_trigger == trigger_function_t::brake)
+    if (cfg.left_trigger == trigger_function_t::deacceleration)
         brake = std::max<float>(brake, input.bLeftTrigger);
-    if (cfg.right_trigger == trigger_function_t::brake)
+    if (cfg.right_trigger == trigger_function_t::deacceleration)
         brake = std::max<float>(brake, input.bRightTrigger);
-    brake = brake * (cfg.brake_max - 1) / 255 + 1;
+    brake = brake * (cfg.deaccel_max - 1) / 255 + 1;
 
     if (g_input_state.stick_mode == stick_mode_t::mouse) {
         hscroll((float)(x * cfg.base_speed * accel)/(FPS * brake));

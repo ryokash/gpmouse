@@ -7,7 +7,14 @@
 #include <filesystem>
 #include <cassert>
 
-#include <toml.hpp>
+#define TOML_TOML11
+#ifdef TOML_TOML11
+	#include <toml.hpp>
+#else
+	#include <toml++/toml.hpp>
+#endif // def TOML_TOML11
+
+#include <magic_enum.hpp>
 #include <spdlog/sinks/rotating_file_sink.h>
 #include <boost/algorithm/string/split.hpp>
 #include <boost/algorithm/string/classification.hpp>
@@ -17,6 +24,7 @@
 
 #define XINPUT_GAMEPAD_GUIDE 0x0400
 #define MAX_PATH_LENGTH 32767
+
 
 namespace gpmouse
 {
@@ -313,6 +321,9 @@ constexpr virtual_key_code_t virtual_key_codes[] = {
 	{ "VK_HANGEUL", VK_HANGEUL },
 	{ "VK_HANGUL", VK_HANGUL },
 	{ "VK_HANJA", VK_HANJA },
+	//
+	{ "VK_PAGEUP", VK_PRIOR },
+	{ "VK_PAGEDOWN", VK_NEXT },
 };
 
 const char* vk_name(uint8_t vk)
@@ -322,6 +333,8 @@ const char* vk_name(uint8_t vk)
 
 std::vector<key_binding_t> g_key_bindings;
 key_binding_t g_single_button[16];
+stick_params_t g_stick_params[XUSER_MAX_COUNT];
+
 //std::vector<std::regex> g_apps;
 struct app_t {
 	std::string name;
@@ -430,6 +443,79 @@ uint8_t parse_vk_code(const std::string& s)
 	return 0;
 }
 
+#ifdef TOML_TOML11
+template <typename TC, typename K>
+float as_float(const toml::basic_value<TC>& v, const K& k, float default_value)
+{
+	if (v.is_empty())
+		return default_value;
+
+	try {
+		return toml::find<float>(v, k);
+	}
+	catch (toml::type_error& exc) {
+		return toml::find<int64_t>(v, k);
+	}
+	catch (std::out_of_range& exc) {
+		return default_value;
+	}
+}
+
+template <typename TC>
+//stick_t load_stick_params(const toml::basic_value<TC>& v, uint32_t deadzone=2500,
+//	acceleration_t accel_type=acceleration_t::exponential,
+//	float base_speed=0.8, float accel_max=8, float deaccel_max=4, 
+//	trigger_function_t lt=trigger_function_t::nop, 
+//	trigger_function_t rt=trigger_function_t::nop)
+stick_t load_stick_params(const toml::basic_value<TC>& v, const stick_t& defval=stick_t())
+{
+	namespace me = magic_enum;
+
+	static const char* trigger_funcion_aliases[][2] = {
+		{ "accel", "acceleration" },
+		{ "deaccel", "deacceleration" },
+	};
+
+	stick_t c = defval;
+
+	if (v.is_empty())
+		return c;
+
+	c.deadzone = toml::find_or<uint32_t>(v, "deadzone", defval.deadzone);
+	c.accel_type = defval.accel_type;
+	c.base_speed = as_float(v, "base_speed", defval.base_speed);
+	c.accel_max = as_float(v, "accel_max", defval.accel_max);
+	c.deaccel_max = as_float(v, "deaccel_max", defval.deaccel_max);
+
+	try {
+		auto lt = toml::find<std::string>(v, "left_trigger");
+		for (auto pair: trigger_funcion_aliases)
+			if (boost::iequals(lt, pair[0])) {
+				lt = pair[1];
+				break;
+			}
+		c.left_trigger = me::enum_cast<trigger_function_t>(lt, me::case_insensitive).value();
+	}
+	catch (std::out_of_range&) {
+		c.left_trigger = defval.left_trigger;
+	}
+
+	try {
+		auto rt = toml::find<std::string>(v, "right_trigger");
+		for (auto pair: trigger_funcion_aliases)
+			if (boost::iequals(rt, pair[0])) {
+				rt = pair[1];
+				break;
+			}
+		c.right_trigger = me::enum_cast<trigger_function_t>(rt, me::case_insensitive).value();
+	}
+	catch (std::out_of_range&) {
+		c.left_trigger = defval.right_trigger;
+	}
+
+	return c;
+}
+
 void configure()
 {
 	using namespace std::regex_constants;
@@ -445,7 +531,24 @@ void configure()
 		return;
 	}
 
+	auto accel = magic_enum::enum_cast<trigger_function_t>("accel");
+	auto acceleration = magic_enum::enum_cast<trigger_function_t>("acceleration");
+
 	auto cfg = toml::parse(cfg_file, toml::spec::v(1, 1, 0));
+
+	auto cursor = toml::find_or_default<toml::value>(cfg, "cursor");
+	g_stick_params[0].cursor
+		= g_stick_params[1].cursor
+		= g_stick_params[2].cursor
+		= g_stick_params[3].cursor 
+		= load_stick_params(cursor, { .deadzone=1000, .base_speed=0.3, });
+
+	auto scroll = toml::find_or_default<toml::value>(cfg, "scroll");
+	g_stick_params[0].scroll
+		= g_stick_params[1].scroll
+		= g_stick_params[2].scroll
+		= g_stick_params[3].scroll
+		= load_stick_params(scroll, { .deadzone = 5000, .base_speed = 0.01, .accel_max = 16, });
 
 	memset(g_single_button, 0, sizeof(g_single_button));
 	auto buttons = toml::find<std::vector<toml::value>>(cfg, "bindings", "buttons");
@@ -689,6 +792,9 @@ void configure()
 		}
 	);
 }
+#else
+
+#endif // def TOML_TOML11
 
 std::shared_ptr<spdlog::logger> get_logger()
 {
