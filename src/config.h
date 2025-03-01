@@ -148,8 +148,8 @@ struct key_binding_t
 		COPILOT = 1 << 6,
 	};
 	enum {
-		ONESHOT       = 1 << 0,
-		ACTIVE_WINDOW = 1 << 1,
+		ONESHOT				= 1 << 0,
+		FOREGROUND_WINDOW	= 1 << 1,
 	};
 
 	bool has_alt() const {
@@ -192,11 +192,11 @@ struct key_binding_t
 	void oneshot(bool val) {
 		set_flag(ONESHOT, val);
 	}
-	bool active_window() const {
-		return flags & ACTIVE_WINDOW;
+	bool foreground_window() const {
+		return flags & FOREGROUND_WINDOW;
 	}
-	void active_window(bool val) {
-		set_flag(ACTIVE_WINDOW, val);
+	void foreground_window(bool val) {
+		set_flag(FOREGROUND_WINDOW, val);
 	}
 
 	void fill(keystate_t& ks) {

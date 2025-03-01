@@ -620,7 +620,7 @@ void configure()
 		}
 		else
 			k.priority += UCHAR_MAX;
-		k.active_window(toml::find_or_default<bool>(binding, "active_window"));
+		k.foreground_window(toml::find_or_default<bool>(binding, "foreground_window"));
 		k.oneshot(toml::find_or_default<bool>(binding, "oneshot"));
 
 		auto m = binding["modifiers"];
