@@ -248,6 +248,19 @@ DWORD get_process_id_under_cursor()
     return pid;
 }
 
+DWORD get_foreground_process_id()
+{
+    auto hwnd = GetForegroundWindow();
+    if (!hwnd)
+        return 0;
+
+    DWORD pid;
+    if (GetWindowThreadProcessId(hwnd, &pid) == 0)
+        return 0;
+
+    return pid;
+}
+
 std::string get_executable_name(DWORD process_id)
 {
     auto process = OpenProcess(PROCESS_QUERY_INFORMATION, FALSE, process_id);
@@ -283,7 +296,7 @@ keystate_t translate_input(WORD input)
     auto N = __popcnt16(input);
 
     keystate_t keys = {};
-    if (lb == ub) { // input に対するキーバインディングがない
+    if (lb == ub) { // the combination of buttons is not defined
         // 個々のボタンのキーバインディングを組み合わせる
         DWORD i, mask = input;
         while (BitScanForward(&i, mask)) {
@@ -298,11 +311,14 @@ keystate_t translate_input(WORD input)
     }
     else {
         auto pid = get_process_id_under_cursor();
-        auto process = get_executable_name(pid);
+        auto cursor_process = get_executable_name(pid);
+
+        pid = get_foreground_process_id();
+        auto foreground_process = get_executable_name(pid);
 
 #ifdef _DEBUG
         log->info("finding custom rule");
-        log->info("target process: \"{}\", input: {:04X}", process, input);
+        log->info("cursor: \"{}\", foreground: \"{}\", input: {:04X}", cursor_process, foreground_process, input);
 #endif
 
         for (auto i = lb; i != ub; ++i) {
@@ -312,6 +328,7 @@ keystate_t translate_input(WORD input)
             else
                 log->info("Testing \"{}\"", *(std::string*)((char*)i->executable + 48));
 #endif
+            auto& process = i->foreground_window() ? foreground_process : cursor_process;
             if (i->executable != 0 && !std::regex_match(process, *i->executable))
                 continue;
             i->fill(keys);
