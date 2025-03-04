@@ -274,7 +274,7 @@ std::string get_executable_name(DWORD process_id)
         HANDLE _handle;
     }
     process = OpenProcess(PROCESS_QUERY_INFORMATION, FALSE, process_id);
-    if (process)
+    if (!process)
         return "";
 
     char buf[MAX_PATH];
