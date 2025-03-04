@@ -281,8 +281,12 @@ std::string get_executable_name(DWORD process_id)
     if (GetModuleFileNameExA(process, 0, buf, ARRAYSIZE(buf)) == MAX_PATH)
         return "";
 
-    char* filename = strrchr(buf, '\\') + 1;
-    return filename;
+    // Though there should be at least one '\\' in buf from windows path format specification.
+    auto p = strrchr(buf, '\\');
+    if (p == 0)
+        return "";
+
+    return p + 1;
 }
 
 
