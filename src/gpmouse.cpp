@@ -263,8 +263,18 @@ DWORD get_foreground_process_id()
 
 std::string get_executable_name(DWORD process_id)
 {
-    auto process = OpenProcess(PROCESS_QUERY_INFORMATION, FALSE, process_id);
-    if (process == 0)
+    struct handle_t {
+        handle_t(HANDLE handle):
+            _handle(handle) {}
+        ~handle_t() {
+            CloseHandle(_handle);
+        }
+        operator HANDLE() const { return _handle; }
+        operator bool() const { return _handle != 0; }
+        HANDLE _handle;
+    }
+    process = OpenProcess(PROCESS_QUERY_INFORMATION, FALSE, process_id);
+    if (process)
         return "";
 
     char buf[MAX_PATH];
