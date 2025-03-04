@@ -278,7 +278,7 @@ std::string get_executable_name(DWORD process_id)
         return "";
 
     char buf[MAX_PATH];
-    if (GetModuleFileNameExA(process, 0, buf, ARRAYSIZE(buf)) == 0)
+    if (GetModuleFileNameExA(process, 0, buf, ARRAYSIZE(buf)) == MAX_PATH)
         return "";
 
     char* filename = strrchr(buf, '\\') + 1;
