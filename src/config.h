@@ -41,18 +41,58 @@ constexpr inline uint64_t modifiers_mask(int i)
 		mask_bit(i, VK_RWIN);
 }
 
+constexpr inline uint64_t extended_keys_mask(int i)
+{
+	return
+		mask_bit(i, VK_RMENU) |
+		mask_bit(i, VK_RCONTROL) |
+		mask_bit(i, VK_LWIN) |
+		mask_bit(i, VK_RWIN) |
+		mask_bit(i, VK_INSERT) |
+		mask_bit(i, VK_DELETE) |
+		mask_bit(i, VK_HOME) |
+		mask_bit(i, VK_END) |
+		mask_bit(i, VK_PRIOR) |
+		mask_bit(i, VK_NEXT) |
+		mask_bit(i, VK_UP) |
+		mask_bit(i, VK_DOWN) |
+		mask_bit(i, VK_LEFT) |
+		mask_bit(i, VK_RIGHT) |
+		mask_bit(i, VK_NUMLOCK) |
+		mask_bit(i, VK_PAUSE) | // TODO: Ctrl+Pause is extended key ??
+		mask_bit(i, VK_PRINT) |
+		mask_bit(i, VK_DIVIDE) |
+		mask_bit(i, VK_RETURN);
+}
+
 static constexpr uint64_t MOUSE_EVENTS_MASK[4] = {
 	mouse_events_mask(0),
 	mouse_events_mask(1),
 	mouse_events_mask(2),
 	mouse_events_mask(3),
 };
-static const uint64_t MODIFIERS_MASK[4] = {
+static constexpr uint64_t MODIFIERS_MASK[4] = {
 	modifiers_mask(0),
 	modifiers_mask(1),
 	modifiers_mask(2),
 	modifiers_mask(3),
 };
+static constexpr uint64_t EXTENDED_KEYS_MASK[4] = {
+	extended_keys_mask(0),
+	extended_keys_mask(1),
+	extended_keys_mask(2),
+	extended_keys_mask(3),
+};
+
+inline bool has_key(const uint64_t keys[4], uint8_t vk)
+{
+	return keys[vk >> 6] & (1ull << (vk & 0x3f));
+}
+inline bool is_extended_key(uint8_t vk)
+{
+	return has_key(EXTENDED_KEYS_MASK, vk);
+}
+
 
 constexpr inline uint64_t keys_mask(int i) {
 	return (~mouse_events_mask(i)) & (~modifiers_mask(i));

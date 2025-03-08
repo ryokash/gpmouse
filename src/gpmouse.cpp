@@ -298,7 +298,6 @@ void gp_handle_analogue_input(const stick_params_t& config, const XINPUT_GAMEPAD
 
 keystate_t g_prev_keys = {};
 
-
 keystate_t translate_input(WORD input)
 {
 #ifdef _DEBUG
@@ -380,6 +379,7 @@ void make_mouse_button_input(INPUT& i, uint8_t vk, bool up)
         i.mi.dwFlags = up ? ((uint32_t)button << 1) : (uint32_t)button;
     }
 }
+
 void make_kbd_input(INPUT& i, uint8_t vk, bool up) {
     auto logger = get_logger();
     logger->debug("{:<20} {}", vk_name(vk), up ? "Up" : "Down");
@@ -387,8 +387,11 @@ void make_kbd_input(INPUT& i, uint8_t vk, bool up) {
     memset(&i, 0, sizeof(INPUT));
     i.type = INPUT_KEYBOARD;
     i.ki.wVk = vk;
+    i.ki.wScan = MapVirtualKeyW(vk, MAPVK_VK_TO_VSC);
     if (up)
         i.ki.dwFlags = KEYEVENTF_KEYUP;
+    if (is_extended_key(vk))
+        i.ki.dwFlags |= KEYEVENTF_EXTENDEDKEY;
 }
 
 void gp_handle_buttons_input(WORD buttons, keystate_t& state)
