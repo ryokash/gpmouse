@@ -6,6 +6,8 @@
 #include <vector>
 #include <filesystem>
 #include <cassert>
+#include <cstdlib>
+#include <stdexcept>
 
 #define TOML_TOML11
 #ifdef TOML_TOML11
@@ -516,20 +518,11 @@ stick_t load_stick_params(const toml::basic_value<TC>& v, const stick_t& defval=
 	return c;
 }
 
-void configure()
+void configure_input(const toml::value& cfg)
 {
 	using namespace std::regex_constants;
-	namespace fs = std::filesystem;
 
 	g_apps.clear();
-	g_key_bindings.clear();
-
-	auto cfg_file = fs::path(application_directory())/L"gpmouse.toml";
-	
-	if (!fs::is_regular_file(cfg_file)) {
-		default_config();
-		return;
-	}
 
 	auto accel = magic_enum::enum_cast<trigger_function_t>("accel");
 	auto acceleration = magic_enum::enum_cast<trigger_function_t>("acceleration");
@@ -677,24 +670,110 @@ void configure()
 				a.buttons == b.buttons && a.priority < b.priority; 
 		}
 	);
+} // configure_input()
+
+
+std::shared_ptr<spdlog::logger> get_logger(const std::string& dir, size_t max_size, size_t max_files)
+{
+	namespace fs = std::filesystem;
+
+	static std::shared_ptr<spdlog::logger> logger;
+	if (!logger) {
+		auto path = fs::path(dir)/"gpmouse.log";
+		logger = spdlog::rotating_logger_mt("gpmouse", path.string(), max_size, max_files);
+	}
+	return logger;
 }
+
+#pragma warning(push)
+#pragma warning(disable:4996)
+std::string expand_environment_variables(const std::string& s)
+{
+	using namespace std::regex_constants;
+
+	std::regex env("<[^>]*>", ECMAScript | icase);
+
+	std::smatch matches;
+	if (std::regex_search(s, matches, env)) {
+		std::string ret;
+		auto p = s.cbegin();
+		auto out = std::back_inserter(ret);
+
+		for (auto& m: matches) {
+			if (m.length() == 2)
+				throw std::runtime_error("found empty variable name in log directory setting");
+			std::copy(p, m.first, out);
+			p += m.length();
+
+			auto varname = m.str().substr(1, m.length() - 2);
+			auto varval = std::getenv(varname.c_str());
+			if (varval == NULL)
+				throw std::runtime_error(std::format("no environment variable named '{}'", varname));
+			std::copy(varval, varval + strlen(varval), out);
+		}
+
+		std::copy(p, s.cend(), out);
+
+		return ret;
+	}
+	else
+		return s;
+}
+#pragma warning(pop)
+
+void configure_log(const toml::value& cfg)
+{
+	auto logging_cfg = toml::find<toml::value>(cfg, "logging");
+
+	auto dir = toml::find_or<std::string>(logging_cfg, "directory", "<temp>");
+	dir = expand_environment_variables(dir);
+
+	auto max_size = toml::find_or<size_t>(logging_cfg, "max_size", 4 * 1024 * 1024);
+	auto max_files = toml::find_or<size_t>(logging_cfg, "max_files", 10);
+
+	auto logger = get_logger(dir, max_size, max_files);
+
+
+	auto level_str = toml::find_or_default<std::string>(logging_cfg, "level");
+	if (!level_str.empty()) {
+		auto level = spdlog::level::from_str(level_str);
+		logger->set_level(level);
+	}
+
+	auto pattern = toml::find_or_default<std::string>(logging_cfg, "pattern");
+	if (!pattern.empty())
+		logger->set_pattern(pattern);
+
+	auto format = toml::find_or_default<std::string>(logging_cfg, "format");
+	if (!format.empty()) {
+		// logger->set_formatter(
+	}
+} // configure_log()
+
 #else
 
 #endif // def TOML_TOML11
 
 std::shared_ptr<spdlog::logger> get_logger()
 {
-	auto max_size = 1048576 * 4;
-	auto max_files = 10;
-	
-	static auto logger = spdlog::rotating_logger_mt("gpmouse", "logs/gpmouse.log", max_size, max_files);
-#ifdef _DEBUG
-	logger->set_level(spdlog::level::level_enum::debug);
-#else
-	logger->set_level(spdlog::level::level_enum::info);
-#endif
+	return get_logger("", 0, 0);
+}
 
-	return logger;
+void configure()
+{
+	namespace fs = std::filesystem;
+
+	auto cfg_file = fs::path(application_directory()) / L"gpmouse.toml";
+
+	if (!fs::is_regular_file(cfg_file)) {
+		default_config();
+		return;
+	}
+
+	auto cfg = toml::parse(cfg_file, toml::spec::v(1, 1, 0));
+
+	configure_log(cfg);
+	configure_input(cfg);
 }
 
 } // namespace gpmouse
