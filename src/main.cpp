@@ -206,7 +206,7 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE UNUSED(prev), LPTSTR cmdline, 
         configure();
     }
     catch (std::exception& exc) {
-        MessageBoxA(0, exc.what(), "error", MB_OK);
+        MessageBoxA(0, exc.what(), "error", MB_OK|MB_ICONERROR);
         return -1;
     }
     catch (...) {
